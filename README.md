@@ -14,9 +14,8 @@ AXe is a comprehensive CLI tool for interacting with iOS Simulators using Apple'
   - [Accessibility](#accessibility)
 - [Quick Start](#quick-start)
   - [Installation](#installation)
-    - [Option 1: Download Pre-built Binary](#option-1-download-pre-built-binary)
-    - [Option 2: Install via Homebrew](#option-2-install-via-homebrew)
-    - [Option 3: Development](#option-3-development)
+    - [Install via Homebrew](#install-via-homebrew)
+    - [Build from source](#build-from-source)
   - [Basic Usage](#basic-usage)
 - [Commands Overview](#commands-overview)
   - [**Touch \& Gestures**](#touch--gestures-1)
@@ -70,25 +69,7 @@ AXe provides complete iOS Simulator automation capabilities:
 
 ### Installation
 
-#### Option 1: Download Pre-built Binary
-
-Download the latest release directly:
-
-```bash
-# Download the latest release
-curl -L -o AXe-macOS-latest.tar.gz https://github.com/cameroncooke/AXe/releases/download/v1.0.43/AXe-macOS-v1.0.43.tar.gz
-
-# Extract the archive
-tar -xzf AXe-macOS-latest.tar.gz
-
-# Navigate to extracted directory
-cd AXe-Final-*/
-
-# Run AXe
-./axe --version
-```
-
-#### Option 2: Install via Homebrew
+#### Install via Homebrew
 
 ```bash
 # Install via Homebrew
@@ -98,7 +79,7 @@ brew install cameroncooke/axe/axe
 axe --version
 ```
 
-#### Option 3: Development
+#### Build from source
 
 For development work:
 
