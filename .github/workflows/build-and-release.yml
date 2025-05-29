@@ -192,7 +192,9 @@ jobs:
           echo "ℹ️ No changes to XCFrameworks detected, skipping commit"
         else
           git commit -m "Update XCFrameworks to IDB commit ${{ steps.idb_check.outputs.idb_commit }}"
-          git push
+          
+          # Push to the main branch 
+          git push origin HEAD:main
           echo "✅ XCFrameworks committed and pushed successfully"
         fi
 
