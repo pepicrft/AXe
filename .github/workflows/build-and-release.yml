@@ -203,7 +203,24 @@ jobs:
         path: idb_checkout
         key: idb-repo-${{ runner.os }}-${{ steps.idb_check.outputs.idb_commit }}
 
+    - name: Prepare - Clean Swift build environment
+      run: |
+        echo "🧹 Cleaning Swift build environment..."
+        rm -rf .build
+        rm -rf ~/Library/Developer/Xcode/DerivedData/*
+        echo "✅ Swift build environment cleaned"
+
     - name: Build - AXe executable
+      env:
+        SWIFT_DETERMINISTIC_HASHING: 1
+        HOMEBREW_NO_AUTO_UPDATE: 1
+        CI_BUILD: "true"
+        TMPDIR: "/tmp"
+        TMP: "/tmp"
+        TEMP: "/tmp"
+        XDG_CACHE_HOME: "/tmp"
+        CLANG_MODULE_CACHE_PATH: "/tmp/clang-modules"
+        SWIFT_MODULE_CACHE_PATH: "/tmp/swift-modules"
       run: scripts/build.sh executable
 
     - name: Sign - AXe executable
