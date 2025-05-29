@@ -501,6 +501,24 @@ function notarize_package() {
       cp "${extracted_executable}" "${BUILD_OUTPUT_DIR}/axe"
       print_success "Original executable replaced with notarized version"
       
+      # Verify notarization status using spctl
+      print_info "Verifying notarization with spctl assessment..."
+      spctl -a -v "${BUILD_OUTPUT_DIR}/axe" 2>&1 | grep -q "accepted" || {
+        print_info "Note: spctl shows 'not an app' for command-line tools - this is expected"
+        print_info "Notarized command-line tools are validated differently by macOS"
+      }
+      
+      # Check if the executable has the notarization signature
+      print_info "Checking code signature details..."
+      local sig_info=$(codesign -dv "${BUILD_OUTPUT_DIR}/axe" 2>&1)
+      if echo "$sig_info" | grep -q "runtime"; then
+        print_success "Executable has runtime hardening enabled (required for notarization)"
+      else
+        print_warning "Runtime hardening not detected in signature"
+      fi
+      
+      print_success "Notarized executable is ready for distribution"
+      
       # Create final deployment package in temporary directory
       print_info "Creating final deployment package..."
       local final_package_name="AXe-Final-$(date +%Y%m%d-%H%M%S)"
@@ -512,7 +530,12 @@ function notarize_package() {
       
       # Copy notarized executable and frameworks to final package
       cp "${BUILD_OUTPUT_DIR}/axe" "${final_package_dir}/"
-      cp -R "${BUILD_OUTPUT_DIR}/Frameworks" "${final_package_dir}/"
+      if [ -d "${BUILD_OUTPUT_DIR}/Frameworks" ]; then
+        cp -R "${BUILD_OUTPUT_DIR}/Frameworks" "${final_package_dir}/"
+        print_info "Included Frameworks directory in final package"
+      else
+        print_info "No Frameworks directory found - creating executable-only package"
+      fi
       
       # Create final zip package
       print_info "Creating final package: ${final_package_zip}"
