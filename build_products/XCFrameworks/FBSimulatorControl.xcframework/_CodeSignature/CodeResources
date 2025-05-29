@@ -6,7 +6,7 @@
 	<dict>
 		<key>macos-arm64_x86_64/FBSimulatorControl.framework/Versions/A/FBSimulatorControl</key>
 		<data>
-		8oI2rtG2d2JbIX7i+RFRY7gvv4w=
+		kBHNeibtlD7QVxkXrv6Npd35rA8=
 		</data>
 		<key>macos-arm64_x86_64/FBSimulatorControl.framework/Versions/A/Headers/FBFramebuffer.h</key>
 		<data>
@@ -157,11 +157,11 @@
 		<dict>
 			<key>hash</key>
 			<data>
-			8oI2rtG2d2JbIX7i+RFRY7gvv4w=
+			kBHNeibtlD7QVxkXrv6Npd35rA8=
 			</data>
 			<key>hash2</key>
 			<data>
-			UkPcXPvkWtUUu/ZeIEgsNc/f14AJKrZVy6+Vde56n1I=
+			zt4qhNqx2JEgDwVZfiSbc+uLL18JqYt7XoFGId5Pg9I=
 			</data>
 		</dict>
 		<key>macos-arm64_x86_64/FBSimulatorControl.framework/Versions/A/Headers/FBFramebuffer.h</key>
