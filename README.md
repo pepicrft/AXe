@@ -2,6 +2,7 @@
 
 AXe is a comprehensive CLI tool for interacting with iOS Simulators using Apple's Accessibility APIs and HID (Human Interface Device) functionality.
 
+[![CI](https://github.com/cameroncooke/AXe/actions/workflows/build-and-release.yml/badge.svg)](https://github.com/cameroncooke/AXe/actions/workflows/build-and-release.yml)
 [![Licence: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 
@@ -13,8 +14,9 @@ AXe is a comprehensive CLI tool for interacting with iOS Simulators using Apple'
   - [Accessibility](#accessibility)
 - [Quick Start](#quick-start)
   - [Installation](#installation)
-    - [Running Pre-built Binary](#running-pre-built-binary)
-    - [Development](#development)
+    - [Option 1: Download Pre-built Binary](#option-1-download-pre-built-binary)
+    - [Option 2: Install via Homebrew](#option-2-install-via-homebrew)
+    - [Option 3: Development](#option-3-development)
   - [Basic Usage](#basic-usage)
 - [Commands Overview](#commands-overview)
   - [**Touch \& Gestures**](#touch--gestures-1)
@@ -68,29 +70,37 @@ AXe provides complete iOS Simulator automation capabilities:
 
 ### Installation
 
-Download the latest release from the [releases page](https://github.com/cameroncooke/AXe/releases) or build from source.
+#### Option 1: Download Pre-built Binary
 
-#### Running Pre-built Binary
-
-If you download the pre-built binary from releases, you may need to set the framework search path:
+Download the latest release directly:
 
 ```bash
-# Download and extract the release
-tar -xzf AXe-macOS-Universal-v1.0.0.tar.gz
+# Download the latest release
+curl -L -o AXe-macOS-latest.tar.gz https://github.com/cameroncooke/AXe/releases/latest/download/AXe-macOS-v1.0.43.tar.gz
 
-# Run with framework path (if needed)
-DYLD_FRAMEWORK_PATH="./xcframeworks/FBControlCore.xcframework/macos-arm64_x86_64:./xcframeworks/FBDeviceControl.xcframework/macos-arm64_x86_64:./xcframeworks/FBSimulatorControl.xcframework/macos-arm64_x86_64:./xcframeworks/IDBCompanionUtilities.xcframework/macos-arm64_x86_64:./xcframeworks/XCTestBootstrap.xcframework/macos-arm64_x86_64:./xcframeworks/CompanionLib.xcframework/macos-arm64_x86_64" ./axe --version
+# Extract the archive
+tar -xzf AXe-macOS-latest.tar.gz
 
-# Or create a wrapper script for convenience
-echo '#!/bin/bash
-DYLD_FRAMEWORK_PATH="./xcframeworks/FBControlCore.xcframework/macos-arm64_x86_64:./xcframeworks/FBDeviceControl.xcframework/macos-arm64_x86_64:./xcframeworks/FBSimulatorControl.xcframework/macos-arm64_x86_64:./xcframeworks/IDBCompanionUtilities.xcframework/macos-arm64_x86_64:./xcframeworks/XCTestBootstrap.xcframework/macos-arm64_x86_64:./xcframeworks/CompanionLib.xcframework/macos-arm64_x86_64" ./axe "$@"' > axe-wrapper.sh
-chmod +x axe-wrapper.sh
-./axe-wrapper.sh --version
+# Navigate to extracted directory
+cd AXe-Final-*/
+
+# Run AXe
+./axe --version
 ```
 
-#### Development
+#### Option 2: Install via Homebrew
 
-For development work, the framework path is **not needed** when using Swift Package Manager:
+```bash
+# Install via Homebrew
+brew install cameroncooke/axe/axe
+
+# Use directly
+axe --version
+```
+
+#### Option 3: Development
+
+For development work:
 
 ```bash
 # Clone the repository
