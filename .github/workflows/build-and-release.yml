@@ -2,7 +2,13 @@ name: CI
 
 on:
   release:
-    types: [created, edited]
+    types: [created, edited, published, unpublished, prereleased, released]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (e.g., v1.0.43)'
+        required: false
+        type: string
 
 env:
   ARCHIVE_NAME: AXe-macOS # Name for the release archive
@@ -41,9 +47,24 @@ jobs:
     - name: Extract version from tag
       id: version
       run: |
-        VERSION=${GITHUB_REF#refs/tags/v}
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          # Manual trigger - use provided tag or latest tag
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            # Get the latest tag
+            TAG=$(git describe --tags --abbrev=0)
+          fi
+          echo "Using tag from manual trigger: $TAG"
+        else
+          # Release event - use the release tag
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "Using tag from release event: $TAG"
+        fi
+        
+        VERSION=${TAG#v}
         echo "version=$VERSION" >> $GITHUB_OUTPUT
-        echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        echo "tag=$TAG" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
 
     - name: Restore idb repository cache
@@ -278,6 +299,7 @@ jobs:
         fi
 
     - name: Delete existing release asset (if re-running)
+      if: github.event_name == 'release'
       continue-on-error: true
       run: |
         ASSET_NAME="${{ steps.create_archive.outputs.archive_name }}"
@@ -298,6 +320,7 @@ jobs:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
     - name: Upload release asset
+      if: github.event_name == 'release'
       uses: actions/upload-release-asset@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -307,8 +330,18 @@ jobs:
         asset_name: ${{ steps.create_archive.outputs.archive_name }}
         asset_content_type: application/gzip
 
+    - name: Upload build artifact (manual trigger)
+      if: github.event_name == 'workflow_dispatch'
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ steps.create_archive.outputs.archive_name }}
+        path: ${{ steps.create_archive.outputs.archive_name }}
+        retention-days: 30
+
     - name: Update Homebrew tap
-      if: ${{ !github.event.release.prerelease }}
+      if: |
+        (github.event_name == 'release' && !github.event.release.prerelease) || 
+        (github.event_name == 'workflow_dispatch')
       env:
         HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
       run: |
@@ -318,7 +351,12 @@ jobs:
           exit 0
         fi
         
-        echo "🍺 Updating Homebrew tap..."
+        if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+          echo "🍺 Updating Homebrew tap (manual trigger)..."
+        else
+          echo "🍺 Updating Homebrew tap (release event)..."
+        fi
+        
         git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/cameroncooke/homebrew-axe.git tap-repo
         cd tap-repo
         
