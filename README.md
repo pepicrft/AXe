@@ -76,7 +76,7 @@ Download the latest release directly:
 
 ```bash
 # Download the latest release
-curl -L -o AXe-macOS-latest.tar.gz https://github.com/cameroncooke/AXe/releases/latest/download/AXe-macOS-v1.0.43.tar.gz
+curl -L -o AXe-macOS-latest.tar.gz https://github.com/cameroncooke/AXe/releases/download/v1.0.43/AXe-macOS-v1.0.43.tar.gz
 
 # Extract the archive
 tar -xzf AXe-macOS-latest.tar.gz
