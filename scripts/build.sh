@@ -519,6 +519,33 @@ function notarize_package() {
       
       print_success "Notarized executable is ready for distribution"
       
+      # Ensure Frameworks directory exists for final package
+      print_info "Preparing Frameworks directory for final package..."
+      if [ ! -d "${BUILD_OUTPUT_DIR}/Frameworks" ]; then
+        print_info "Frameworks directory not found, recreating from XCFrameworks..."
+        mkdir -p "${BUILD_OUTPUT_DIR}/Frameworks"
+        
+        # Extract frameworks from XCFrameworks for deployment
+        for xcframework in "${BUILD_OUTPUT_DIR}/XCFrameworks"/*.xcframework; do
+          if [ -d "$xcframework" ]; then
+            local framework_name=$(basename "$xcframework" .xcframework)
+            print_info "Extracting ${framework_name}.framework from XCFramework..."
+            
+            # Find the macOS framework inside the XCFramework
+            local macos_framework=$(find "$xcframework" -name "${framework_name}.framework" -path "*/macos-*" | head -1)
+            if [ -d "$macos_framework" ]; then
+              cp -R "$macos_framework" "${BUILD_OUTPUT_DIR}/Frameworks/"
+              print_info "Copied ${framework_name}.framework to Frameworks directory"
+            else
+              print_warning "Could not find macOS framework in ${xcframework}"
+            fi
+          fi
+        done
+        print_success "Frameworks directory recreated from XCFrameworks"
+      else
+        print_info "Frameworks directory already exists"
+      fi
+      
       # Create final deployment package in temporary directory
       print_info "Creating final deployment package..."
       local final_package_name="AXe-Final-$(date +%Y%m%d-%H%M%S)"
