@@ -1,0 +1,283 @@
+name: CI
+
+on:
+  release:
+    types: [created]
+
+env:
+  ARCHIVE_NAME: AXe-macOS # Name for the release archive
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-and-release:
+    runs-on: macos-15
+    
+    outputs:
+      archive_name: ${{ steps.create_archive.outputs.archive_name }}
+      archive_sha256: ${{ steps.create_archive.outputs.sha256 }}
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      package_path: ${{ steps.notarize.outputs.package_path }}
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Setup Xcode
+      uses: maxim-lobanov/setup-xcode@v1
+      with:
+        xcode-version: '16.3'
+        
+    - name: Install dependencies
+      run: |
+        brew install jq
+        
+    - name: Extract version from tag
+      id: version
+      run: |
+        VERSION=${GITHUB_REF#refs/tags/v}
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        echo "Building version: $VERSION"
+
+    - name: Cache idb repository
+      uses: actions/cache@v4
+      with:
+        path: idb_checkout
+        key: idb-repo-${{ runner.os }}-stable
+        restore-keys: |
+          idb-repo-${{ runner.os }}-
+
+    - name: Check IDB repository freshness
+      id: idb_check
+      run: |
+        set -e
+        
+        # Get latest remote commit
+        REMOTE_COMMIT=$(git ls-remote https://github.com/facebook/idb.git HEAD | cut -f1)
+        echo "Latest IDB commit on remote: $REMOTE_COMMIT"
+        
+        if [ -d "idb_checkout" ] && [ -d "idb_checkout/.git" ]; then
+          # We have a cached repo, check if it's up to date
+          LOCAL_COMMIT=$(git -C idb_checkout rev-parse HEAD)
+          echo "Cached IDB commit: $LOCAL_COMMIT"
+          
+          if [ "$LOCAL_COMMIT" = "$REMOTE_COMMIT" ]; then
+            echo "✅ Cached IDB repository is up to date"
+            echo "needs_setup=false" >> $GITHUB_OUTPUT
+          else
+            echo "🔄 Cached IDB repository is outdated, needs refresh"
+            echo "needs_setup=true" >> $GITHUB_OUTPUT
+          fi
+        else
+          # No cached repo or invalid cache
+          echo "📥 No cached IDB repository found, needs setup"
+          echo "needs_setup=true" >> $GITHUB_OUTPUT
+        fi
+        
+        # Always output the remote commit for cache keys
+        echo "idb_commit=$REMOTE_COMMIT" >> $GITHUB_OUTPUT
+
+    - name: Setup - Clone IDB repository
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      run: |
+        chmod +x scripts/build.sh
+        scripts/build.sh setup
+
+    - name: Make build script executable
+      run: chmod +x scripts/build.sh
+
+    # Build Script Steps - Only needed if IDB was updated
+    - name: Clean - Remove previous build artifacts
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      run: scripts/build.sh clean
+
+    - name: Build - IDB Frameworks
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      run: scripts/build.sh frameworks
+
+    - name: Install - Copy frameworks to build directory
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      run: scripts/build.sh install
+
+    - name: Strip - Remove nested frameworks
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      run: scripts/build.sh strip
+
+    # Code Signing Setup
+    - name: Setup - Import code signing certificate
+      env:
+        DEVELOPER_ID_APPLICATION_P12: ${{ secrets.DEVELOPER_ID_APPLICATION_P12 }}
+        DEVELOPER_ID_APPLICATION_PASSWORD: ${{ secrets.DEVELOPER_ID_APPLICATION_PASSWORD }}
+      run: |
+        set -e
+        if [ -z "$DEVELOPER_ID_APPLICATION_P12" ]; then 
+          echo "⚠️ No certificate provided - builds will be unsigned"
+          exit 0
+        fi
+        
+        echo "🔐 Setting up code signing certificate..."
+        KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+        KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+        
+        # Create and configure keychain
+        security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+        security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        
+        # Import certificate
+        echo "$DEVELOPER_ID_APPLICATION_P12" | base64 --decode > "$RUNNER_TEMP/certificate.p12"
+        if [ -z "$DEVELOPER_ID_APPLICATION_PASSWORD" ]; then 
+          security import "$RUNNER_TEMP/certificate.p12" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        else
+          security import "$RUNNER_TEMP/certificate.p12" -P "$DEVELOPER_ID_APPLICATION_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN_PATH"
+        fi
+        
+        # Configure keychain
+        security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | sed s/\"//g)
+        security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+        
+        echo "✅ Code signing certificate imported successfully"
+
+    - name: Setup - Prepare notarization API key
+      env:
+        NOTARIZE_APP_STORE_CONNECT_API_KEY: ${{ secrets.NOTARIZE_APP_STORE_CONNECT_API_KEY }}
+      run: |
+        set -e
+        if [ -z "$NOTARIZE_APP_STORE_CONNECT_API_KEY" ]; then 
+          echo "❌ ERROR: Notarization API key is required but not provided"
+          echo "Please set NOTARIZE_APP_STORE_CONNECT_API_KEY secret in repository settings"
+          exit 1
+        fi
+        
+        echo "🔑 Setting up notarization API key..."
+        mkdir -p keys
+        echo "$NOTARIZE_APP_STORE_CONNECT_API_KEY" | base64 --decode > keys/AuthKey_${{ secrets.NOTARIZE_APP_STORE_CONNECT_API_KEY_ID }}.p8
+        echo "✅ Notarization API key prepared"
+
+    - name: Sign - Framework binaries
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      run: scripts/build.sh sign-frameworks
+
+    - name: Create - XCFrameworks
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      run: scripts/build.sh xcframeworks
+
+    - name: Sign - XCFramework bundles  
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      run: scripts/build.sh sign-xcframeworks
+
+    - name: Build - AXe executable
+      run: scripts/build.sh executable
+
+    - name: Sign - AXe executable
+      run: scripts/build.sh sign-executable
+
+    - name: Package - Create notarization package
+      run: scripts/build.sh package
+
+    - name: Notarize - Submit to Apple for notarization
+      id: notarize
+      env:
+        NOTARIZATION_API_KEY_PATH: keys/AuthKey_${{ secrets.NOTARIZE_APP_STORE_CONNECT_API_KEY_ID }}.p8
+        NOTARIZATION_KEY_ID: ${{ secrets.NOTARIZE_APP_STORE_CONNECT_API_KEY_ID }}
+        NOTARIZATION_ISSUER_ID: ${{ secrets.NOTARIZE_APP_STORE_CONNECT_ISSUER_ID }}
+        TEMP_DIR: ${{ runner.temp }}
+      run: |
+        scripts/build.sh notarize
+        # The notarization step outputs the package path - we need to capture it
+        PACKAGE_PATH=$(find "$RUNNER_TEMP" -name "AXe-Final-*.zip" | head -1)
+        if [ -n "$PACKAGE_PATH" ]; then
+          echo "package_path=$PACKAGE_PATH" >> $GITHUB_OUTPUT
+          echo "📦 Final package location: $PACKAGE_PATH"
+        else
+          echo "❌ Could not find final package"
+          exit 1
+        fi
+
+    - name: Create release archive
+      id: create_archive
+      run: |
+        ARCHIVE_NAME="${{ env.ARCHIVE_NAME }}-${{ steps.version.outputs.tag }}.tar.gz"
+        echo "archive_name=$ARCHIVE_NAME" >> $GITHUB_OUTPUT
+        
+        PACKAGE_PATH="${{ steps.notarize.outputs.package_path }}"
+        if [ -f "$PACKAGE_PATH" ]; then
+          echo "📦 Creating release archive from: $PACKAGE_PATH"
+          
+          # Extract the package to create the tar.gz
+          TEMP_EXTRACT="$RUNNER_TEMP/extract"
+          mkdir -p "$TEMP_EXTRACT"
+          unzip -q "$PACKAGE_PATH" -d "$TEMP_EXTRACT"
+          
+          # Create tar.gz from extracted contents
+          tar -czf "$ARCHIVE_NAME" -C "$TEMP_EXTRACT" .
+          
+          # Calculate SHA256
+          SHA256=$(shasum -a 256 "$ARCHIVE_NAME" | awk '{print $1}')
+          echo "sha256=$SHA256" >> $GITHUB_OUTPUT
+          echo "✅ Archive created: $ARCHIVE_NAME (SHA256: $SHA256)"
+        else
+          echo "❌ Package path not found: $PACKAGE_PATH"
+          exit 1
+        fi
+
+    - name: Upload release asset
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ${{ steps.create_archive.outputs.archive_name }}
+        asset_name: ${{ steps.create_archive.outputs.archive_name }}
+        asset_content_type: application/gzip
+
+    - name: Update Homebrew tap
+      if: ${{ !github.event.release.prerelease }}
+      env:
+        HOMEBREW_TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      run: |
+        set -e
+        if [ -z "$HOMEBREW_TAP_TOKEN" ]; then
+          echo "⚠️ Homebrew tap update skipped - no token provided"
+          exit 0
+        fi
+        
+        echo "🍺 Updating Homebrew tap..."
+        git clone https://x-access-token:${HOMEBREW_TAP_TOKEN}@github.com/cameroncooke/homebrew-axe.git tap-repo
+        cd tap-repo
+        
+        FORMULA_FILE="Formula/axe.rb"
+        URL="https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.tag }}/${{ steps.create_archive.outputs.archive_name }}"
+        SHA256="${{ steps.create_archive.outputs.sha256 }}"
+        VERSION_TAG="${{ steps.version.outputs.version }}"
+
+        # Update formula with new version, URL, and SHA256
+        awk -v version="$VERSION_TAG" -v url="$URL" -v sha="$SHA256" '
+        /version "/ {gsub(/version \".*\"/, "version \"" version "\""); print; next}
+        /url "/ {gsub(/url \".*\"/, "url \"" url "\""); print; next}
+        /sha256 "/ {gsub(/sha256 \".*\"/, "sha256 \"" sha "\""); print; next}
+        {print}
+        ' "$FORMULA_FILE" > "${FORMULA_FILE}.new" && mv "${FORMULA_FILE}.new" "$FORMULA_FILE"
+
+        git config user.name "github-actions[bot]"
+        git config user.email "github-actions[bot]@users.noreply.github.com"
+        git add "$FORMULA_FILE"
+        if ! git diff --staged --quiet; then
+          git commit -m "Update axe to v${VERSION_TAG}"
+          git push origin main
+          echo "✅ Homebrew formula updated successfully to v${VERSION_TAG}"
+        else
+          echo "ℹ️ No changes to commit for Homebrew formula (v${VERSION_TAG})"
+        fi
+
+    - name: Cleanup
+      if: always()
+      run: |
+        echo "🧹 Cleaning up sensitive files..."
+        rm -rf keys/
+        rm -f "$RUNNER_TEMP"/*.p12
+        echo "✅ Cleanup completed" 
