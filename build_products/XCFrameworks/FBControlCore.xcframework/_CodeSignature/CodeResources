@@ -6,7 +6,7 @@
 	<dict>
 		<key>macos-arm64_x86_64/FBControlCore.framework/Versions/A/FBControlCore</key>
 		<data>
-		ek8ke2koO8PhuQJ5MG6yODj4Gws=
+		bqbDKy8ACe13rklmXhYwn7VYKhc=
 		</data>
 		<key>macos-arm64_x86_64/FBControlCore.framework/Versions/A/Headers/FBAccessibilityCommands.h</key>
 		<data>
@@ -390,15 +390,15 @@
 		</data>
 		<key>macos-arm64_x86_64/FBControlCore.framework/Versions/A/Resources/libMaculator.dylib</key>
 		<data>
-		Ejfb3jOIG1IoR72jlMdFY1F/uWU=
+		O2RTI6puFgRcb4CbDqK3zlK8Dkk=
 		</data>
 		<key>macos-arm64_x86_64/FBControlCore.framework/Versions/A/Resources/libShimulator.dylib</key>
 		<data>
-		rd+1QXFIf7xXfGPt1aq1jGckiJY=
+		S1m+htcNmWpa0TtbGNDexH+RS5Y=
 		</data>
 		<key>macos-arm64_x86_64/FBControlCore.framework/Versions/A/_CodeSignature/CodeResources</key>
 		<data>
-		lBiXdwMOhy15zQeR8EWhpJ4wcZY=
+		WJxZFlm0Tz75Bm2CONP2mLhXojM=
 		</data>
 	</dict>
 	<key>files2</key>
@@ -427,11 +427,11 @@
 		<dict>
 			<key>hash</key>
 			<data>
-			ek8ke2koO8PhuQJ5MG6yODj4Gws=
+			bqbDKy8ACe13rklmXhYwn7VYKhc=
 			</data>
 			<key>hash2</key>
 			<data>
-			/IfdsyKXxD2PufaSRo0eEh1XoMljENljh9lz5wMCKus=
+			Rk7PS4COT6DM86y4jifwQy5yTDPiO4TDuS9qciQuNNE=
 			</data>
 		</dict>
 		<key>macos-arm64_x86_64/FBControlCore.framework/Versions/A/Headers/FBAccessibilityCommands.h</key>
@@ -1483,33 +1483,33 @@
 		<dict>
 			<key>hash</key>
 			<data>
-			Ejfb3jOIG1IoR72jlMdFY1F/uWU=
+			O2RTI6puFgRcb4CbDqK3zlK8Dkk=
 			</data>
 			<key>hash2</key>
 			<data>
-			7h1eA1QME5+hrz79cywd8oONNy1CRgiaE8fMIDlzosk=
+			NV6T8IxRhLaf6qBc07BLxXkT3egJodDD3hzgGmnd5sA=
 			</data>
 		</dict>
 		<key>macos-arm64_x86_64/FBControlCore.framework/Versions/A/Resources/libShimulator.dylib</key>
 		<dict>
 			<key>hash</key>
 			<data>
-			rd+1QXFIf7xXfGPt1aq1jGckiJY=
+			S1m+htcNmWpa0TtbGNDexH+RS5Y=
 			</data>
 			<key>hash2</key>
 			<data>
-			78oHHtDAcq4B/Cfk91A8hACT/x2od0ZHhV+Ecfbb9u8=
+			cbOKfdKdMz0u39FmbRzhIcIQ+lbAgNvzaW1MZ7etDsU=
 			</data>
 		</dict>
 		<key>macos-arm64_x86_64/FBControlCore.framework/Versions/A/_CodeSignature/CodeResources</key>
 		<dict>
 			<key>hash</key>
 			<data>
-			lBiXdwMOhy15zQeR8EWhpJ4wcZY=
+			WJxZFlm0Tz75Bm2CONP2mLhXojM=
 			</data>
 			<key>hash2</key>
 			<data>
-			yOqNl63MlGW+8/uFyXq5uCDfqmSHfclrHhUk4UrK4vc=
+			MFIILeTe3JrdiSiHYpnDpumcJ35S6qYGu9Q2k4bSIm8=
 			</data>
 		</dict>
 		<key>macos-arm64_x86_64/FBControlCore.framework/Versions/Current</key>
