@@ -25,6 +25,9 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        token: ${{ secrets.GITHUB_TOKEN }}
       
     - name: Setup Xcode
       uses: maxim-lobanov/setup-xcode@v1
@@ -43,11 +46,11 @@ jobs:
         echo "tag=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
         echo "Building version: $VERSION"
 
-    - name: Cache idb repository
-      uses: actions/cache@v4
+    - name: Restore idb repository cache
+      uses: actions/cache/restore@v4
       with:
         path: idb_checkout
-        key: idb-repo-${{ runner.os }}-stable
+        key: idb-repo-${{ runner.os }}-dummy
         restore-keys: |
           idb-repo-${{ runner.os }}-
 
@@ -169,6 +172,36 @@ jobs:
     - name: Sign - XCFramework bundles  
       if: steps.idb_check.outputs.needs_setup == 'true'
       run: scripts/build.sh sign-xcframeworks
+
+    - name: Commit updated XCFrameworks
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      run: |
+        set -e
+        
+        echo "🔄 Committing updated XCFrameworks to repository..."
+        
+        # Configure git
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+        # Add the XCFrameworks directory
+        git add build_products/XCFrameworks/
+        
+        # Check if there are changes to commit
+        if git diff --staged --quiet; then
+          echo "ℹ️ No changes to XCFrameworks detected, skipping commit"
+        else
+          git commit -m "Update XCFrameworks to IDB commit ${{ steps.idb_check.outputs.idb_commit }}"
+          git push
+          echo "✅ XCFrameworks committed and pushed successfully"
+        fi
+
+    - name: Save IDB repository cache
+      if: steps.idb_check.outputs.needs_setup == 'true'
+      uses: actions/cache/save@v4
+      with:
+        path: idb_checkout
+        key: idb-repo-${{ runner.os }}-${{ steps.idb_check.outputs.idb_commit }}
 
     - name: Build - AXe executable
       run: scripts/build.sh executable

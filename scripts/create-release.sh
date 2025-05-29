@@ -17,6 +17,19 @@ if ! gh auth status &> /dev/null; then
 fi
 
 # --- Get version ---
+log_info "Fetching latest release information..."
+
+# Get the latest tag from remote
+LATEST_TAG=$(git ls-remote --tags origin | grep -E 'refs/tags/v[0-9]+\.[0-9]+\.[0-9]+' | sed 's/.*refs\/tags\///' | sort -V | tail -1)
+
+if [ -n "$LATEST_TAG" ]; then
+    LATEST_VERSION=${LATEST_TAG#v}  # Remove 'v' prefix
+    log_info "Latest version on origin: $LATEST_VERSION"
+else
+    log_info "No previous releases found on origin"
+fi
+
+echo ""
 echo "Enter the version for the new release (e.g., 1.0.0):"
 read -p "Version: " VERSION
 
@@ -62,14 +75,13 @@ log_info "Creating GitHub release $TAG_NAME..."
 gh release create "$TAG_NAME" \
     --title "Release $TAG_NAME" \
     --notes "$RELEASE_NOTES" \
-    --draft \
-    $PRERELEASE_FLAG
+    --prerelease
 
-log_success "Draft release $TAG_NAME created successfully!"
-log_info "The GitHub Actions workflow will now build and attach the artifacts."
-log_info "Once the build completes, you can publish the release at:"
+log_success "Pre-release $TAG_NAME created successfully!"
+log_info "The GitHub Actions workflow is now building and will attach the artifacts automatically."
+log_info "Once the build completes, you can promote it to a full release at:"
 log_info "https://github.com/$(gh repo view --json owner,name -q '.owner.login + "/" + .name')/releases"
 
 echo ""
 echo "To monitor the build progress:"
-echo "gh run list --workflow=release.yml" 
+echo "gh run list --workflow=build-and-release.yml" 
