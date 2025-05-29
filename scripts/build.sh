@@ -316,7 +316,11 @@ function build_axe_executable() {
   print_subsection "⚡" "Building AXe executable"
   print_info "Using Swift Package Manager to build AXe..."
   
-  # Build using Swift Package Manager
+  # Clean any existing build products to ensure fresh build
+  print_info "Cleaning previous build products..."
+  swift package clean
+  
+  # Build using Swift Package Manager (rely on environment variables for cache control)
   swift build --configuration ${build_config}
   local build_exit_code=$?
   
