@@ -73,10 +73,14 @@ AXe provides complete iOS Simulator automation capabilities:
 
 ```bash
 # Install via Homebrew
+brew tap cameroncooke/axe
+brew install axe
+
+# Or single linger
 brew install cameroncooke/axe/axe
 
 # Use directly
-axe --version
+axe --help
 ```
 
 #### Build from source
@@ -89,12 +93,12 @@ git clone https://github.com/cameroncooke/AXe.git
 cd AXe
 
 # Run directly with Swift (frameworks handled automatically)
-swift run axe --version
+swift run axe --help
 swift run axe list-simulators
 
 # Build for development
 swift build
-.build/debug/axe --version
+.build/debug/axe --help
 ```
 
 ### Basic Usage
