@@ -12,8 +12,6 @@ enum GesturePreset: String, CaseIterable, ExpressibleByArgument {
     case swipeFromRightEdge = "swipe-from-right-edge"
     case swipeFromTopEdge = "swipe-from-top-edge"
     case swipeFromBottomEdge = "swipe-from-bottom-edge"
-    case pinchIn = "pinch-in"
-    case pinchOut = "pinch-out"
     
     var description: String {
         switch self {
@@ -33,10 +31,6 @@ enum GesturePreset: String, CaseIterable, ExpressibleByArgument {
             return "Swipe from top edge downward"
         case .swipeFromBottomEdge:
             return "Swipe from bottom edge upward"
-        case .pinchIn:
-            return "Pinch in (zoom out) gesture"
-        case .pinchOut:
-            return "Pinch out (zoom in) gesture"
         }
     }
     
@@ -63,12 +57,6 @@ enum GesturePreset: String, CaseIterable, ExpressibleByArgument {
             return (centerX, edgeMargin, centerX, screenHeight - edgeMargin)
         case .swipeFromBottomEdge:
             return (centerX, screenHeight - edgeMargin, centerX, edgeMargin)
-        case .pinchIn:
-            // Single finger motion for simplicity - from corner toward center
-            return (centerX - 100, centerY - 100, centerX - 50, centerY - 50)
-        case .pinchOut:
-            // Single finger motion for simplicity - from center toward corner
-            return (centerX - 50, centerY - 50, centerX - 100, centerY - 100)
         }
     }
     
@@ -78,8 +66,6 @@ enum GesturePreset: String, CaseIterable, ExpressibleByArgument {
             return 0.5
         case .swipeFromLeftEdge, .swipeFromRightEdge, .swipeFromTopEdge, .swipeFromBottomEdge:
             return 0.3
-        case .pinchIn, .pinchOut:
-            return 0.8
         }
     }
     
@@ -89,8 +75,6 @@ enum GesturePreset: String, CaseIterable, ExpressibleByArgument {
             return 25.0
         case .swipeFromLeftEdge, .swipeFromRightEdge, .swipeFromTopEdge, .swipeFromBottomEdge:
             return 50.0
-        case .pinchIn, .pinchOut:
-            return 20.0
         }
     }
 }
@@ -105,11 +89,10 @@ struct Gesture: AsyncParsableCommand {
           scroll-up, scroll-down, scroll-left, scroll-right
           swipe-from-left-edge, swipe-from-right-edge
           swipe-from-top-edge, swipe-from-bottom-edge
-          pinch-in, pinch-out
         
         Examples:
           axe gesture scroll-up --udid SIMULATOR_UDID
-          axe gesture pinch-in --duration 1.5 --udid SIMULATOR_UDID
+          axe gesture scroll-down --duration 1.5 --udid SIMULATOR_UDID
           axe gesture swipe-from-left-edge --screen-width 430 --screen-height 932 --udid SIMULATOR_UDID
         """
     )

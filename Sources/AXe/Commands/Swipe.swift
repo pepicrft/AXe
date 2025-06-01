@@ -87,6 +87,20 @@ struct Swipe: AsyncParsableCommand {
         logger.info().log("Performing swipe from (\(startX), \(startY)) to (\(endX), \(endY))")
         logger.info().log("Duration: \(swipeDuration)s, Delta: \(swipeDelta)px")
 
+        // Broadcast swipe notification for external listeners
+        NotificationCenter.default.post(
+            name: .hidSwipePerformed,
+            object: nil,
+            userInfo: [
+                "startX": startX,
+                "startY": startY,
+                "endX": endX,
+                "endY": endY,
+                "duration": swipeDuration,
+                "delta": swipeDelta
+            ]
+        )
+
         // Create swipe events with timing controls
         var events: [FBSimulatorHIDEvent] = []
         
@@ -126,4 +140,9 @@ struct Swipe: AsyncParsableCommand {
         
         logger.info().log("Swipe gesture completed successfully")
     }
+}
+
+// MARK: - Notification Extension
+extension Notification.Name {
+    static let hidSwipePerformed = Notification.Name("hidSwipePerformed")
 } 

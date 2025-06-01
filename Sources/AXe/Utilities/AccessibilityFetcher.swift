@@ -38,7 +38,6 @@ struct AccessibilityFetcher {
         }
 
         if let jsonString = String(data: jsonData, encoding: .utf8) {
-            print("\nAccessibility Information (JSON):\n")
             print(jsonString)
         } else {
             logger.error().log("Failed to convert accessibility info to JSON string.")

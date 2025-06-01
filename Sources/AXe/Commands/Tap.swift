@@ -82,5 +82,8 @@ struct Tap: AsyncParsableCommand {
             )
         
         logger.info().log("Tap completed successfully")
+        
+        // Output success message to stdout
+        print("✓ Tap at (\(pointX), \(pointY)) completed successfully")
     }
 }

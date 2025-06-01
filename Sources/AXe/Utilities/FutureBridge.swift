@@ -95,13 +95,39 @@ public enum FutureBridge { // Renamed from BridgeFuture to avoid potential namin
 
   /// Special overload for FBFuture<NSNull> representing void.
   public static func value(_ future: FBFuture<NSNull>) async throws {
-    _ = try await value(future as FBFuture<NSNull_TypeHack>) // Cast to specific type for AnyObject conformance
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+        future.onQueue(BridgeQueues.futureSerialFullfillmentQueue, notifyOfCompletion: { resolvedFuture in
+          if let error = resolvedFuture.error {
+            continuation.resume(throwing: error)
+          } else {
+            // For NSNull futures, we just complete with void
+            continuation.resume(returning: ())
+          }
+        })
+      }
+    } onCancel: {
+      future.cancel()
+    }
   }
 
   /// Special overload for FBFuture<NSNumber> representing Bool.
   public static func value(_ future: FBFuture<NSNumber>) async throws -> Bool {
-    let numberAsSwiftBool = try await value(future as FBFuture<NSNumber_TypeHack>)
-    return numberAsSwiftBool // numberAsSwiftBool is already a Swift Bool due to bridging
+    try await withTaskCancellationHandler {
+      try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Bool, Error>) in
+        future.onQueue(BridgeQueues.futureSerialFullfillmentQueue, notifyOfCompletion: { resolvedFuture in
+          if let error = resolvedFuture.error {
+            continuation.resume(throwing: error)
+          } else if let value = resolvedFuture.result {
+            continuation.resume(returning: value.boolValue)
+          } else {
+            continuation.resume(throwing: FBFutureError.continuationFulfilledWithoutValues)
+          }
+        })
+      }
+    } onCancel: {
+      future.cancel()
+    }
   }
 
   /// Awaitable value that waits for publishing from the wrapped futureContext.
