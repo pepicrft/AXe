@@ -10,23 +10,35 @@ import SwiftUI
 struct ContentView: View {
     @StateObject private var navigationManager = NavigationManager.shared
     @State private var navigationPath = NavigationPath()
+    @State private var showSwipeTestModal = false
     
     var body: some View {
         NavigationStack(path: $navigationPath) {
-            MainMenuView()
+            MainMenuView(showSwipeTestModal: $showSwipeTestModal)
                 .navigationDestination(for: String.self) { screen in
                     destinationView(for: screen)
                 }
         }
+        .fullScreenCover(isPresented: $showSwipeTestModal) {
+            SwipeTestView()
+        }
         .onAppear {
             // Handle direct launch to specific screen
             if let directScreen = navigationManager.directLaunchScreen {
-                navigationPath.append(directScreen)
+                if directScreen == "swipe-test" {
+                    showSwipeTestModal = true
+                } else {
+                    navigationPath.append(directScreen)
+                }
             }
         }
         .onChange(of: navigationManager.directLaunchScreen) { _, newValue in
             if let screen = newValue {
-                navigationPath.append(screen)
+                if screen == "swipe-test" {
+                    showSwipeTestModal = true
+                } else {
+                    navigationPath.append(screen)
+                }
             }
         }
     }
@@ -37,8 +49,6 @@ struct ContentView: View {
         // Touch & Gestures
         case "tap-test":
             TapTestView()
-        case "swipe-test":
-            SwipeTestView()
         case "touch-control":
             TouchControlView()
         case "gesture-presets":
@@ -52,13 +62,19 @@ struct ContentView: View {
         case "key-sequence":
             KeySequenceView()
             
+        // Hardware
+        case "button-test":
+            ButtonTestView()
+
         default:
-            MainMenuView()
+            Text("Screen not found")
         }
     }
 }
 
 struct MainMenuView: View {
+    @Binding var showSwipeTestModal: Bool
+    
     private let menuSections: [(String, [(String, String, String)])] = [
         ("Touch & Gestures", [
             ("tap-test", "Tap Test", "Displays coordinates of CLI taps"),
@@ -70,6 +86,9 @@ struct MainMenuView: View {
             ("text-input", "Text Input", "Text typed by CLI commands"),
             ("key-press", "Key Press", "Detects CLI key events"),
             ("key-sequence", "Key Sequence", "Detects CLI key sequences")
+        ]),
+        ("Hardware", [
+            ("button-test", "Button Test", "Hardware button press detection")
         ])
     ]
     
@@ -78,13 +97,28 @@ struct MainMenuView: View {
             ForEach(menuSections, id: \.0) { section in
                 Section(section.0) {
                     ForEach(section.1, id: \.0) { item in
-                        NavigationLink(value: item.0) {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(item.1)
-                                    .font(.headline)
-                                Text(item.2)
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
+                        if item.0 == "swipe-test" {
+                            Button(action: {
+                                showSwipeTestModal = true
+                            }) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.1)
+                                        .font(.headline)
+                                    Text(item.2)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
+                                .foregroundColor(.primary)
+                            }
+                        } else {
+                            NavigationLink(value: item.0) {
+                                VStack(alignment: .leading, spacing: 4) {
+                                    Text(item.1)
+                                        .font(.headline)
+                                    Text(item.2)
+                                        .font(.caption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
                     }

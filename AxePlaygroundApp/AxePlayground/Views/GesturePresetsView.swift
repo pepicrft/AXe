@@ -91,7 +91,8 @@ struct SceneKitCubeView: UIViewRepresentable {
 struct GesturePresetsView: View {
     @State private var gestureHistory: [GestureEvent] = []
     @State private var gestureColor: Color = .blue
-    @State private var lastDetectedGesture: String = ""
+    @State private var lastDetectedGesture: String = "None"
+    @State private var showLastDetectedGesture: Bool = false
     @State private var gestureResetTimer: Timer? = nil
     
     @GestureState private var magnificationState = false
@@ -108,7 +109,7 @@ struct GesturePresetsView: View {
     
     var body: some View {
         ZStack {
-             if !lastDetectedGesture.isEmpty {
+             if showLastDetectedGesture {
                  Text(lastDetectedGesture.uppercased())
                      .font(.headline).fontWeight(.bold).foregroundColor(.white)
                      .padding(.horizontal, 16).padding(.vertical, 8)
@@ -134,7 +135,6 @@ struct GesturePresetsView: View {
                         MagnificationGesture()
                             .updating($magnificationState) { value, state, _ in
                                 // `value` from MagnificationGesture is the cumulative scale factor from the start.
-                                print("MAGNIFICATION GESTURE: .updating. Raw gesture value: \(Float(value))")
                                 state = true
                                 
                                 // Set cubeScale directly based on gesture's value, then clamp.
@@ -150,16 +150,10 @@ struct GesturePresetsView: View {
                                 
                                 self.gestureResetTimer?.invalidate()
                                 self.gestureResetTimer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: false) { _ in 
-                                    print("MAGNIFICATION TIMER FIRED. Scale captured at timer set: \(scaleAtThisMagnificationUpdate)")
-
                                     if scaleAtThisMagnificationUpdate <= 0.65 {
-                                         print("MAGNIFICATION TIMER: Detected pinch-in based on captured scale \(scaleAtThisMagnificationUpdate)")
                                          self.detectGesture("pinch-in")
                                     } else if scaleAtThisMagnificationUpdate >= 1.35 {
-                                         print("MAGNIFICATION TIMER: Detected pinch-out based on captured scale \(scaleAtThisMagnificationUpdate)")
                                          self.detectGesture("pinch-out")
-                                    } else {
-                                        print("MAGNIFICATION TIMER: Captured scale \(scaleAtThisMagnificationUpdate) is neutral/ambiguous.")
                                     }
                                     
                                     self.resetCubeState(triggeredByMagnification: true)
@@ -167,20 +161,16 @@ struct GesturePresetsView: View {
                             }
                             .onEnded { value in
                                 let finalMagnificationFactor = Float(value)
-                                print("MAGNIFICATION GESTURE: .onEnded called. Final raw factor: \(finalMagnificationFactor)")
                                 self.gestureResetTimer?.invalidate()
                                 self.gestureResetTimer = nil
                                 
                                 if abs(finalMagnificationFactor - 1.0) > 0.2 {
                                     let detectedPinchType = finalMagnificationFactor > 1.0 ? "pinch-out" : "pinch-in"
-                                    print("MAGNIFICATION GESTURE: .onEnded - Detected significant pinch: \(detectedPinchType)")
                                     self.detectGesture(detectedPinchType)
                                 } else {
-                                    print("MAGNIFICATION GESTURE: .onEnded - Pinch not significant: \(finalMagnificationFactor)")
                                 }
                                 
                                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                                    print("MAGNIFICATION GESTURE: .onEnded - Dispatching resetCubeState.")
                                     self.resetCubeState(triggeredByMagnification: true)
                                 }
                             },
@@ -188,26 +178,22 @@ struct GesturePresetsView: View {
                         SimultaneousGesture(
                             RotationGesture()
                                 .updating($rotationState) { value, state, _ in
-                                    print("ROTATION GESTURE: .updating")
                                     state = true
                                     self.cubeRotationZ = Float(value.radians * 180 / .pi)
                                     self.cubeColor = .purple
                                     self.gestureColor = self.cubeColor
                                 }
                                 .onEnded { value in
-                                    print("ROTATION GESTURE: .onEnded")
                                     var detected = false
                                     if abs(value.radians) > 0.3 {
                                         self.detectGesture("rotate")
                                         detected = true
                                     }
                                     self.resetCubeState(triggeredByMagnification: false)
-                                    if detected { print("ROTATION GESTURE: Detected significant rotation.")}
                                 },
                             
                             DragGesture(minimumDistance: 0)
                                 .updating($dragState) { value, state, _ in
-                                    print("DRAG GESTURE: .updating")
                                     state = true
                                     let sensitivity: Float = 0.5
                                     self.cubeRotationX = Float(value.translation.height) * sensitivity
@@ -223,7 +209,6 @@ struct GesturePresetsView: View {
                                     self.gestureColor = self.cubeColor
                                 }
                                 .onEnded { value in
-                                    print("DRAG GESTURE: .onEnded")
                                     let distance = sqrt(pow(value.translation.width, 2) + pow(value.translation.height, 2))
                                     var detected = false
                                     if distance > 30 {
@@ -232,7 +217,6 @@ struct GesturePresetsView: View {
                                         detected = true
                                     }
                                     self.resetCubeState(triggeredByMagnification: false)
-                                    if detected { print("DRAG GESTURE: Detected significant drag.")} else { print("DRAG GESTURE: Drag not significant.")}
                                 }
                         )
                     )
@@ -256,6 +240,8 @@ struct GesturePresetsView: View {
                     Text("Watch the 3D cube react to your gestures").font(.subheadline).foregroundColor(.secondary).multilineTextAlignment(.center)
                     Text("Detected: \(gestureHistory.count)").font(.headline).foregroundColor(.purple)
                         .accessibilityIdentifier("gesture-count").accessibilityValue("\(gestureHistory.count)")
+                    Text("Latest Gesture: \(lastDetectedGesture)")
+                        .accessibilityIdentifier("latest-gesture").accessibilityValue(lastDetectedGesture)
                 }
                 .padding().background(Material.thin).cornerRadius(12).shadow(radius: 4)
                 
@@ -306,31 +292,21 @@ struct GesturePresetsView: View {
     }
     
     private func detectGesture(_ gesture: String) {
-        print("DETECT GESTURE CALLED: \(gesture)")
         let event = GestureEvent(gesture: gesture, timestamp: Date())
         gestureHistory.append(event)
         lastDetectedGesture = gesture
         
+        showLastDetectedGesture = true
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
-            if self.lastDetectedGesture == gesture {
-                print("DETECT GESTURE: Clearing lastDetectedGesture '\(gesture)' after 2s")
-                self.lastDetectedGesture = ""
-            } else {
-                print("DETECT GESTURE: Not clearing lastDetectedGesture, it changed from '\(gesture)' to '\(self.lastDetectedGesture)'")
-            }
+            self.showLastDetectedGesture = false
         }
     }
     
     private func resetCubeState(triggeredByMagnification: Bool) {
-        print("RESET CUBE STATE CALLED. Triggered by Magnification: \(triggeredByMagnification). Current lastDetectedGesture: '\(self.lastDetectedGesture)'")
-        
         if triggeredByMagnification {
-            print("RESET CUBE STATE: Invalidating magnification gestureResetTimer because triggeredByMagnification is true.")
             gestureResetTimer?.invalidate()
             gestureResetTimer = nil
-        } else {
-            print("RESET CUBE STATE: Preserving magnification gestureResetTimer because triggeredByMagnification is false.")
-        }
+        } 
         
         cubeScale = 1.0
         cubeRotationX = 0.0
@@ -345,7 +321,6 @@ struct GesturePresetsView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) {
             if self.gestureTypeForSceneKit == "reset" { self.gestureTypeForSceneKit = "" }
         }
-        print("RESET CUBE STATE: Finished resetting visual state.")
     }
     
     private func gestureStatusColor() -> Color {

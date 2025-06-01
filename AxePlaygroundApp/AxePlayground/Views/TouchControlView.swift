@@ -11,7 +11,8 @@ import SwiftUI
 struct TouchControlView: View {
     @State private var touchEvents: [TouchEvent] = []
     @State private var eventCount = 0
-    @State private var lastTouchCoordinates: CGPoint?
+    @State private var lastTouchDownCoordinates: CGPoint?
+    @State private var lastTouchUpCoordinates: CGPoint?
     
     var body: some View {
         GeometryReader { geometry in
@@ -49,12 +50,20 @@ struct TouchControlView: View {
                             .accessibilityIdentifier("touch-event-count")
                             .accessibilityValue("\(eventCount)")
                         
-                        if let lastTouch = lastTouchCoordinates {
-                            Text("Last touch: (\(Int(lastTouch.x)), \(Int(lastTouch.y)))")
+                        if let lastTouchDown = lastTouchDownCoordinates {
+                            Text("Last touch down: (\(Int(lastTouchDown.x)), \(Int(lastTouchDown.y)))")
                                 .font(.headline)
-                                .foregroundColor(.purple)
-                                .accessibilityIdentifier("last-touch-coordinates")
-                                .accessibilityValue("x:\(Int(lastTouch.x)),y:\(Int(lastTouch.y))")
+                                .foregroundColor(.red)
+                                .accessibilityIdentifier("last-touch-down-coordinates")
+                                .accessibilityValue("x:\(Int(lastTouchDown.x)),y:\(Int(lastTouchDown.y))")
+                        }
+                        
+                        if let lastTouchUp = lastTouchUpCoordinates {
+                            Text("Last touch up: (\(Int(lastTouchUp.x)), \(Int(lastTouchUp.y)))")
+                                .font(.headline)
+                                .foregroundColor(.green)
+                                .accessibilityIdentifier("last-touch-up-coordinates")
+                                .accessibilityValue("x:\(Int(lastTouchUp.x)),y:\(Int(lastTouchUp.y))")
                         }
                     }
                     .padding()
@@ -116,6 +125,14 @@ struct TouchControlView: View {
             y: point.y + globalFrame.minY
         )
         
+        // Update the appropriate coordinates based on touch type
+        switch type {
+        case .down:
+            lastTouchDownCoordinates = screenPoint
+        case .up:
+            lastTouchUpCoordinates = screenPoint
+        }
+        
         // Offset position slightly to avoid perfect overlap
         let offsetX = point.x + CGFloat.random(in: -8...8)
         let offsetY = point.y + CGFloat.random(in: -8...8)
@@ -133,7 +150,6 @@ struct TouchControlView: View {
         
         touchEvents.append(event)
         eventCount += 1
-        lastTouchCoordinates = screenPoint
         
         // Animate the indicator appearing
         withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {

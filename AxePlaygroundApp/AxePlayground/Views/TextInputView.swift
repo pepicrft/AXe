@@ -35,6 +35,9 @@ struct TextInputView: View {
                     .textFieldStyle(RoundedBorderTextFieldStyle())
                     .font(.title2)
                     .focused($isTextFieldFocused)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .keyboardType(.asciiCapable)
                     .accessibilityIdentifier("text-input-field")
                     .accessibilityValue(inputText.isEmpty ? "empty" : inputText)
                     .onChange(of: isTextFieldFocused) { _, focused in

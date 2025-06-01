@@ -36,14 +36,14 @@ struct TapTestView: View {
                         .foregroundColor(.secondary)
                         .accessibilityIdentifier("tap-test-description")
                     
-                    Text("Taps: \(tapCount)")
+                    Text("Tap Count: \(tapCount)")
                         .font(.headline)
                         .foregroundColor(.blue)
                         .accessibilityIdentifier("tap-count")
                         .accessibilityValue("\(tapCount)")
                     
                     if let lastTap = lastTapCoordinates {
-                        Text("Last tap: (\(Int(lastTap.x)), \(Int(lastTap.y)))")
+                        Text("Tap Location: (\(Int(lastTap.x)), \(Int(lastTap.y)))")
                             .font(.headline)
                             .foregroundColor(.green)
                             .accessibilityIdentifier("last-tap-coordinates")

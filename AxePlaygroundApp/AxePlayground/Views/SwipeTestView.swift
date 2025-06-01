@@ -8,94 +8,174 @@
 import SwiftUI
 
 struct SwipeTestView: View {
+    @Environment(\.dismiss) private var dismiss
     @State private var swipePaths: [SwipePath] = []
     @State private var currentPath: [CGPoint] = []
     @State private var swipeCount = 0
     
     var body: some View {
-        ZStack {
-            // Interactive swipe area
-            Color.clear
-                .contentShape(Rectangle())
-                .accessibilityIdentifier("swipe-test-area")
-                .gesture(
-                    DragGesture(minimumDistance: 10)
-                        .onChanged { value in
-                            currentPath.append(value.location)
-                        }
-                        .onEnded { value in
-                            if currentPath.count > 1 {
-                                let path = SwipePath(
-                                    startPoint: currentPath.first ?? value.startLocation,
-                                    endPoint: currentPath.last ?? value.location,
-                                    pathPoints: currentPath,
-                                    duration: 0.5
-                                )
-                                swipePaths.append(path)
-                                swipeCount += 1
+        GeometryReader { geometry in
+            ZStack {
+                // Full screen background
+                Color.black.opacity(0.05)
+                    .ignoresSafeArea(.all)
+                
+                // Interactive swipe area - covers entire screen
+                Color.clear
+                    .contentShape(Rectangle())
+                    .accessibilityIdentifier("swipe-test-area")
+                    .gesture(
+                        DragGesture(minimumDistance: 1, coordinateSpace: .global)
+                            .onChanged { value in
+                                // On first point, use startLocation
+                                if currentPath.isEmpty {
+                                    // Using global coordinate space, no need to convert
+                                    currentPath.append(value.startLocation)
+                                }
+                                
+                                // Using global coordinate space, location is already in screen coordinates
+                                currentPath.append(value.location)
                             }
-                            currentPath.removeAll()
+                            .onEnded { value in
+                                if currentPath.count > 1 {
+                                    // Use the actual first point (which is startLocation)
+                                    let startPoint = currentPath.first!
+                                    let endPoint = currentPath.last!
+                                    
+                                    let path = SwipePath(
+                                        startPoint: startPoint,
+                                        endPoint: endPoint,
+                                        pathPoints: currentPath,
+                                        duration: 0.5,
+                                        direction: calculateDirection(from: startPoint, to: endPoint)
+                                    )
+                                    swipePaths.append(path)
+                                    swipeCount += 1
+                                }
+                                currentPath.removeAll()
+                            }
+                    )
+                
+                // Close button - positioned in top-left safe area
+                VStack {
+                    HStack {
+                        Button("✕") {
+                            dismiss()
                         }
-                )
-            
-            VStack {
-                // Header
-                VStack(spacing: 8) {
-                    Text("Swipe Playground")
                         .font(.title2)
                         .fontWeight(.bold)
-                        .accessibilityIdentifier("swipe-test-title")
-                    Text("Drag your finger to create swipe paths")
-                        .font(.subheadline)
-                        .foregroundColor(.secondary)
-                        .accessibilityIdentifier("swipe-test-description")
-                    Text("Swipes: \(swipeCount)")
-                        .font(.headline)
-                        .foregroundColor(.green)
-                        .accessibilityIdentifier("swipe-count")
-                        .accessibilityValue("\(swipeCount)")
+                        .foregroundColor(.primary)
+                        .padding()
+                        .background(Color.white.opacity(0.9))
+                        .clipShape(Circle())
+                        .shadow(radius: 4)
+                        .accessibilityIdentifier("close-button")
+                        
+                        Spacer()
+                    }
+                    .padding(.horizontal)
+                    .padding(.top)
+                    
+                    Spacer()
                 }
-                .padding()
-                .background(Color.white.opacity(0.9))
-                .cornerRadius(12)
-                .shadow(radius: 4)
-
-                Spacer()
-            }
-            .padding()
-            
-            // Current swipe path
-            if !currentPath.isEmpty {
-                SwipePathShape(points: currentPath)
-                    .stroke(Color.blue, lineWidth: 4)
-                    .opacity(0.8)
-                    .accessibilityIdentifier("current-swipe-path")
-            }
-            
-            // Completed swipe paths
-            ForEach(swipePaths) { path in
-                SwipePathView(path: path)
-                    .accessibilityIdentifier("swipe-path-\(path.id.uuidString)")
-                    .accessibilityValue("start:x\(Int(path.startPoint.x)),y\(Int(path.startPoint.y));end:x\(Int(path.endPoint.x)),y\(Int(path.endPoint.y));points:\(path.pathPoints.count)")
-            }
-            
-            // Hidden accessibility element for last swipe
-            if let lastSwipe = swipePaths.last {
+                
+                // Swipe paths with coordinate pills - drawn on top
+                ForEach(swipePaths) { path in
+                    SwipePathView(path: path, screenSize: geometry.size)
+                        .accessibilityIdentifier("swipe-path-\(path.id.uuidString)")
+                        .accessibilityValue("start:x\(Int(path.startPoint.x)),y\(Int(path.startPoint.y));end:x\(Int(path.endPoint.x)),y\(Int(path.endPoint.y))")
+                }
+                
+                // Current swipe path - drawn on top
+                if !currentPath.isEmpty {
+                    SwipePathShape(points: currentPath)
+                        .stroke(Color.blue, lineWidth: 2)
+                        .opacity(0.7)
+                }
+                
+                // Info box - positioned at bottom
+                VStack {
+                    Spacer()
+                    
+                    VStack(spacing: 12) {
+                        Text("Swipe Playground")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .accessibilityIdentifier("swipe-test-title")
+                        
+                        Text("Count: \(swipeCount)")
+                            .font(.headline)
+                            .foregroundColor(.blue)
+                            .accessibilityIdentifier("swipe-count")
+                            .accessibilityValue("\(swipeCount)")
+                        
+                        if let lastSwipe = swipePaths.last {
+                            VStack(spacing: 4) {
+                                Text("Last Swipe:")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                                
+                                Text("Start: (\(Int(lastSwipe.startPoint.x)), \(Int(lastSwipe.startPoint.y)))")
+                                    .font(.subheadline)
+                                    .foregroundColor(.blue)
+                                    .accessibilityIdentifier("last-swipe-start")
+                                
+                                Text("End: (\(Int(lastSwipe.endPoint.x)), \(Int(lastSwipe.endPoint.y)))")
+                                    .font(.subheadline)
+                                    .foregroundColor(.purple)
+                                    .accessibilityIdentifier("last-swipe-end")
+                                
+                                Text("Direction: \(lastSwipe.direction)")
+                                    .font(.subheadline)
+                                    .foregroundColor(.green)
+                                    .accessibilityIdentifier("last-swipe-direction")
+                            }
+                        } else {
+                            Text("No swipes yet - draw with your finger")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                                .multilineTextAlignment(.center)
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color.white.opacity(0.95))
+                            .shadow(color: .black.opacity(0.15), radius: 8, x: 0, y: -2)
+                    )
+                    .padding(.horizontal)
+                    .padding(.bottom, 34) // Account for home indicator
+                }
+                
+                // Hidden accessibility elements
+                if let lastSwipe = swipePaths.last {
+                    Text("")
+                        .accessibilityIdentifier("last-swipe-path")
+                        .accessibilityValue("start:x\(Int(lastSwipe.startPoint.x)),y\(Int(lastSwipe.startPoint.y));end:x\(Int(lastSwipe.endPoint.x)),y\(Int(lastSwipe.endPoint.y))")
+                        .accessibilityHidden(true)
+                }
+                
                 Text("")
-                    .accessibilityIdentifier("last-swipe-path")
-                    .accessibilityValue("start:x\(Int(lastSwipe.startPoint.x)),y\(Int(lastSwipe.startPoint.y));end:x\(Int(lastSwipe.endPoint.x)),y\(Int(lastSwipe.endPoint.y))")
+                    .accessibilityIdentifier("swipe-history")
+                    .accessibilityValue(generateSwipeHistoryString())
                     .accessibilityHidden(true)
             }
-            
-            // Hidden accessibility element that reports all swipe history
-            Text("")
-                .accessibilityIdentifier("swipe-history")
-                .accessibilityValue(generateSwipeHistoryString())
-                .accessibilityHidden(true)
         }
-        .navigationTitle("Swipe Test")
-        .navigationBarTitleDisplayMode(.inline)
+        .ignoresSafeArea(.all) // Full screen coverage
         .accessibilityIdentifier("swipe-test-screen")
+    }
+    
+    private func calculateDirection(from start: CGPoint, to end: CGPoint) -> String {
+        let deltaX = end.x - start.x
+        let deltaY = end.y - start.y
+        
+        // Determine primary direction based on larger delta
+        if abs(deltaX) > abs(deltaY) {
+            return deltaX > 0 ? "Right" : "Left"
+        } else {
+            return deltaY > 0 ? "Down" : "Up"
+        }
     }
     
     private func generateSwipeHistoryString() -> String {
@@ -103,7 +183,7 @@ struct SwipeTestView: View {
             return "no-swipes"
         }
         
-        let recentSwipes = swipePaths.suffix(3) // Last 3 swipes
+        let recentSwipes = swipePaths.suffix(3)
         let swipeStrings = recentSwipes.map { 
             "start:x\(Int($0.startPoint.x)),y\(Int($0.startPoint.y));end:x\(Int($0.endPoint.x)),y\(Int($0.endPoint.y))"
         }
@@ -117,11 +197,30 @@ struct SwipePath: Identifiable {
     let endPoint: CGPoint
     let pathPoints: [CGPoint]
     let duration: Double
+    let direction: String
     let timestamp = Date()
 }
 
 struct SwipePathView: View {
     let path: SwipePath
+    let screenSize: CGSize
+    
+    private var centerPoint: CGPoint {
+        CGPoint(
+            x: (path.startPoint.x + path.endPoint.x) / 2,
+            y: (path.startPoint.y + path.endPoint.y) / 2
+        )
+    }
+    
+    private var directionIcon: String {
+        switch path.direction {
+        case "Right": return "arrow.right"
+        case "Left": return "arrow.left"
+        case "Up": return "arrow.up"
+        case "Down": return "arrow.down"
+        default: return "arrow.right"
+        }
+    }
     
     var body: some View {
         ZStack {
@@ -129,17 +228,17 @@ struct SwipePathView: View {
             SwipePathShape(points: path.pathPoints)
                 .stroke(
                     LinearGradient(
-                        gradient: Gradient(colors: [.green, .blue, .purple]),
+                        gradient: Gradient(colors: [.blue, .cyan, .purple]),
                         startPoint: .leading,
                         endPoint: .trailing
                     ),
                     lineWidth: 3
                 )
-                .opacity(0.7)
+                .opacity(0.8)
             
             // Start point
             Circle()
-                .fill(Color.green)
+                .fill(Color.blue)
                 .frame(width: 12, height: 12)
                 .position(path.startPoint)
                 .accessibilityIdentifier("swipe-start-point")
@@ -147,39 +246,64 @@ struct SwipePathView: View {
             
             // End point
             Circle()
-                .fill(Color.red)
+                .fill(Color.purple)
                 .frame(width: 12, height: 12)
                 .position(path.endPoint)
                 .accessibilityIdentifier("swipe-end-point")
                 .accessibilityValue("x:\(Int(path.endPoint.x)),y:\(Int(path.endPoint.y))")
             
-            // Arrow indicating direction
-            if path.pathPoints.count > 1 {
-                let direction = angleFromPoints(from: path.startPoint, to: path.endPoint)
-                Image(systemName: "arrow.right")
-                    .foregroundColor(.white)
-                    .font(.caption)
-                    .rotationEffect(.radians(direction))
-                    .position(
-                        x: (path.startPoint.x + path.endPoint.x) / 2,
-                        y: (path.startPoint.y + path.endPoint.y) / 2
-                    )
-                    .background(
-                        Circle()
-                            .fill(Color.blue)
-                            .frame(width: 20, height: 20)
-                            .position(
-                                x: (path.startPoint.x + path.endPoint.x) / 2,
-                                y: (path.startPoint.y + path.endPoint.y) / 2
-                            )
-                    )
-                    .accessibilityIdentifier("swipe-direction-arrow")
-            }
+            // Direction arrow at center of path
+            Image(systemName: directionIcon)
+                .font(.system(size: 16, weight: .bold))
+                .foregroundColor(.orange)
+                .background(
+                    Circle()
+                        .fill(Color.white.opacity(0.9))
+                        .frame(width: 28, height: 28)
+                )
+                .position(centerPoint)
+                .accessibilityIdentifier("swipe-direction-arrow")
+                .accessibilityValue("direction:\(path.direction)")
+            
+            // Start coordinate pill
+            CoordinatePill(
+                text: "(\(Int(path.startPoint.x)), \(Int(path.startPoint.y)))",
+                backgroundColor: .blue
+            )
+            .position(
+                x: path.startPoint.x,
+                y: max(25, path.startPoint.y - 25) // Prevent going off top
+            )
+            .accessibilityIdentifier("swipe-start-coordinate")
+            
+            // End coordinate pill
+            CoordinatePill(
+                text: "(\(Int(path.endPoint.x)), \(Int(path.endPoint.y)))",
+                backgroundColor: .purple
+            )
+            .position(
+                x: path.endPoint.x,
+                y: min(screenSize.height - 25, path.endPoint.y + 25) // Prevent going off bottom
+            )
+            .accessibilityIdentifier("swipe-end-coordinate")
         }
     }
+}
+
+struct CoordinatePill: View {
+    let text: String
+    let backgroundColor: Color
     
-    private func angleFromPoints(from: CGPoint, to: CGPoint) -> Double {
-        return atan2(to.y - from.y, to.x - from.x)
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .fontWeight(.medium)
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(backgroundColor.opacity(0.9))
+            .cornerRadius(12)
+            .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
     }
 }
 
@@ -202,7 +326,5 @@ struct SwipePathShape: Shape {
 }
 
 #Preview {
-    NavigationStack {
-        SwipeTestView()
-    }
+    SwipeTestView()
 } 
