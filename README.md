@@ -39,8 +39,7 @@ AXe provides complete iOS Simulator automation capabilities:
 - **Tap**: Precise touch events at specific coordinates with timing controls
 - **Swipe**: Multi-touch gestures with configurable duration and delta
 - **Touch Control**: Low-level touch down/up events for advanced gesture control
-- **Gesture Presets**: Common gesture patterns (scroll-up, scroll-down, scroll-left, scroll-right,
-                          pinch-in, pinch-out etc.)
+- **Gesture Presets**: Common gesture patterns (scroll-up, scroll-down, scroll-left, scroll-right, edge swipes)
 
 ### Input & Text
 - **Text Input**: Comprehensive text typing with automatic shift key handling
@@ -108,13 +107,13 @@ UDID="B34FF305-5EA8-412B-943F-1D0371CA17FF"
 
 # Basic interactions
 axe tap -x 100 -y 200 --udid $UDID
-axe type -t 'Hello World!' --udid $UDID
+axe type 'Hello World!' --udid $UDID
 axe swipe --start-x 100 --start-y 300 --end-x 300 --end-y 100 --udid $UDID
 axe button home --udid $UDID
 
 # Gesture presets
 axe gesture scroll-up --udid $UDID
-axe gesture pinch-in --udid $UDID
+axe gesture swipe-from-left-edge --udid $UDID
 
 # With timing controls (NEW!)
 axe tap -x 100 -y 200 --pre-delay 1.0 --post-delay 0.5 --udid $UDID
@@ -155,10 +154,6 @@ axe gesture swipe-from-right-edge --udid SIMULATOR_UDID
 axe gesture swipe-from-top-edge --udid SIMULATOR_UDID
 axe gesture swipe-from-bottom-edge --udid SIMULATOR_UDID
 
-# Special gestures
-axe gesture pinch-in --udid SIMULATOR_UDID
-axe gesture pinch-out --udid SIMULATOR_UDID
-
 # With custom screen dimensions
 axe gesture scroll-up --screen-width 430 --screen-height 932 --udid SIMULATOR_UDID
 
@@ -170,7 +165,7 @@ axe gesture scroll-down --pre-delay 1.0 --post-delay 0.5 --udid SIMULATOR_UDID
 
 ```bash
 # Simple text input (use single quotes for special characters)
-axe type -t 'Hello World!' --udid SIMULATOR_UDID
+axe type 'Hello World!' --udid SIMULATOR_UDID
 
 # From stdin (best for automation)
 echo "Complex text" | axe type --stdin --udid SIMULATOR_UDID
@@ -238,8 +233,6 @@ This makes AXe a lightweight and easily adoptable alternative for projects that 
 | `swipe-from-right-edge` | Right edge to left edge | Forward navigation |
 | `swipe-from-top-edge` | Top to bottom | Dismiss/close |
 | `swipe-from-bottom-edge` | Bottom to top | Open/reveal |
-| `pinch-in` | Zoom out gesture | Zoom out |
-| `pinch-out` | Zoom in gesture | Zoom in |
 
 ## Contributing
 
