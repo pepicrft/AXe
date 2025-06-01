@@ -76,7 +76,7 @@ AXe provides complete iOS Simulator automation capabilities:
 brew tap cameroncooke/axe
 brew install axe
 
-# Or single linger
+# Or single liner
 brew install cameroncooke/axe/axe
 
 # Use directly
