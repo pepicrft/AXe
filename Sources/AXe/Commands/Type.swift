@@ -8,18 +8,31 @@ struct Type: AsyncParsableCommand {
         abstract: "Type text by entering a sequence of characters.",
         discussion: """
         Input Methods:
-        1. Direct text: -t "Hello World" (use single quotes for special chars: -t 'Hello!')
+        1. Direct text: axe type "Hello World" --udid UDID
         2. From stdin: echo "Hello World!" | axe type --stdin --udid UDID
         3. From file: axe type --file text.txt --udid UDID
         
+        Examples:
+        • Simple text: axe type "Hello World" --udid UDID
+        • With spaces: axe type "Hello, how are you?" --udid UDID
+        • Special characters: axe type 'Hello!' --udid UDID
+        
         Shell Escaping Tips:
+        • Use double quotes for text with spaces: "Hello World"
         • Use single quotes for text with special characters: 'Hello!'
-        • Use double quotes for simple text: "Hello World"
-        • For automation, prefer --stdin or --file methods
+        • For complex text or automation, prefer --stdin or --file methods
+        
+        Character Support:
+        • Only US keyboard characters are supported via HID keycodes
+        • Supported: A-Z, a-z, 0-9, and symbols: !@#$%^&*()_+-={}[]|\\:";'<>?,./`~
+        • Not supported: International characters (£€¥), accented letters (éñü), etc.
+        • This is a limitation of the underlying HID keyboard protocol
+        
+        Note: iOS may apply smart punctuation spacing to some characters.
         """
     )
     
-    @Option(name: .customShort("t"), help: "The text to type. Use single quotes for special characters.")
+    @Argument(help: "The text to type. Use quotes for text with spaces or special characters.")
     var text: String?
     
     @Flag(name: .customLong("stdin"), help: "Read text from standard input.")
@@ -40,11 +53,17 @@ struct Type: AsyncParsableCommand {
         // Determine input source and get text
         let inputText: String
         
+        // Check if we have multiple input sources
+        let sourceCount = [text != nil, useStdin, inputFile != nil].filter { $0 }.count
+        if sourceCount > 1 {
+            throw ValidationError("Please specify only one input source: text argument, --stdin, or --file.")
+        }
+        
         switch (text, useStdin, inputFile) {
-        case (let directText?, false, nil):
-            // Direct text input
-            inputText = directText
-            logger.info().log("Using direct text input: '\(inputText)'")
+        case (let positionalText?, false, nil):
+            // Positional argument
+            inputText = positionalText
+            logger.info().log("Using positional text input: '\(inputText)'")
             
         case (nil, true, nil):
             // Read from stdin
@@ -60,11 +79,11 @@ struct Type: AsyncParsableCommand {
             
         case (nil, false, nil):
             // No input provided
-            throw ValidationError("No input provided. Use -t, --stdin, or --file.")
+            throw ValidationError("No input provided. Provide text as argument, or use --stdin, or --file.")
             
         default:
-            // Multiple input sources provided
-            throw ValidationError("Please specify only one input source: -t, --stdin, or --file.")
+            // This shouldn't happen due to earlier check
+            throw ValidationError("Invalid input configuration.")
         }
         
         // Validate text first
@@ -74,7 +93,12 @@ struct Type: AsyncParsableCommand {
                 let keyEvent = KeyEvent.keyCodeForString(String(char))
                 return keyEvent.keyCode == 0 ? char : nil
             }
-            let errorMessage = "Unsupported characters found: \(unsupportedChars.map { "'\($0)'" }.joined(separator: ", "))"
+            let errorMessage = """
+                Unsupported characters found: \(unsupportedChars.map { "'\($0)'" }.joined(separator: ", "))
+                
+                Only US keyboard characters are supported via HID keycodes.
+                Supported: A-Z, a-z, 0-9, and symbols: !@#$%^&*()_+-={}[]|\\:";'<>?,./`~
+                """
             logger.error().log(errorMessage)
             throw TextToHIDEvents.TextConversionError.unsupportedCharacter(unsupportedChars.first!)
         }
