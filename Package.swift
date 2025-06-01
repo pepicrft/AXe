@@ -40,6 +40,14 @@ let package = Package(
             ],
             plugins: ["VersionPlugin"]
         ),
+        .testTarget(
+            name: "AXeTests",
+            dependencies: ["AXe"],
+            path: "Tests",
+            resources: [
+                .copy("README.md")
+            ]
+        ),
         .plugin(
             name: "VersionPlugin",
             capability: .buildTool(),
