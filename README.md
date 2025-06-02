@@ -83,6 +83,9 @@ brew install cameroncooke/axe/axe
 axe --help
 ```
 
+> [!NOTE]
+> You may see errors when using `brew install`, like `Failed to fix install linkage`; these can be safely ignored. This is because the binaries are already codesigned and Homebrew is attempting to resign them, which is not necessary.
+
 #### Build from source
 
 For development work:
