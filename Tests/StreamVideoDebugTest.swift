@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 
-@Suite("Stream Video Debug Tests")
+@Suite("Stream Video Basic Functionality Tests")
 struct StreamVideoDebugTests {
     @Test("Stream video command runs without hanging")
     func streamVideoBasicExecution() async throws {
@@ -12,13 +12,12 @@ struct StreamVideoDebugTests {
             throw TestError.commandError("No simulator UDID specified")
         }
         
-        // Launch any app to have something on screen
-        try await TestHelpers.launchPlaygroundApp(to: "tap-test")
+        // No need to launch app - stream-video captures the simulator screen directly
         
         // Create a task to run the command
         let commandTask = Task {
             try await TestHelpers.runAxeCommand(
-                "stream-video --format mjpeg --fps 1",
+                "stream-video --format bgra --fps 1",
                 simulatorUDID: udid
             )
         }
