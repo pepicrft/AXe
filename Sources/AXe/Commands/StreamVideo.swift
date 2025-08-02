@@ -85,6 +85,11 @@ struct StreamVideo: AsyncParsableCommand {
         try await setup(logger: logger)
         try await performGlobalSetup(logger: logger)
         
+        // Validate UDID is not empty
+        guard !simulatorUDID.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw CLIError(errorDescription: "Simulator UDID cannot be empty. Use --udid to specify a simulator.")
+        }
+        
         // Get simulator set
         let simulatorSet = try await getSimulatorSet(deviceSetPath: nil, logger: logger, reporter: EmptyEventReporter.shared)
         
@@ -152,36 +157,36 @@ struct StreamVideo: AsyncParsableCommand {
             
             FileHandle.standardError.write(Data("Stream is now running...\n".utf8))
             
-            // Set up cancellation handler
+            // Set up cancellation handler with proper synchronous cleanup
             await withTaskCancellationHandler {
                 // Keep the stream running until cancelled
                 while !Task.isCancelled {
                     try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
                 }
             } onCancel: {
-                Task {
-                    FileHandle.standardError.write(Data("\nStopping video stream...\n".utf8))
+                // Synchronous cleanup - stop the stream immediately
+                FileHandle.standardError.write(Data("\nStopping video stream...\n".utf8))
+                
+                // Use a semaphore to synchronously wait for cleanup
+                let semaphore = DispatchSemaphore(value: 0)
+                
+                BridgeQueues.videoStreamQueue.async {
+                    let stopFuture = videoStream.stopStreaming()
                     
-                    // Stop the video stream on the same queue
-                    do {
-                        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-                            BridgeQueues.videoStreamQueue.async {
-                                let stopFuture = videoStream.stopStreaming()
-                                
-                                stopFuture.onQueue(BridgeQueues.videoStreamQueue, notifyOfCompletion: { future in
-                                    if let error = future.error {
-                                        FileHandle.standardError.write(Data("Stream stop error: \(error)\n".utf8))
-                                        continuation.resume(throwing: error)
-                                    } else {
-                                        FileHandle.standardError.write(Data("Stream stopped successfully\n".utf8))
-                                        continuation.resume()
-                                    }
-                                })
-                            }
+                    stopFuture.onQueue(BridgeQueues.videoStreamQueue, notifyOfCompletion: { future in
+                        if let error = future.error {
+                            FileHandle.standardError.write(Data("Stream stop error: \(error)\n".utf8))
+                        } else {
+                            FileHandle.standardError.write(Data("Stream stopped successfully\n".utf8))
                         }
-                    } catch {
-                        FileHandle.standardError.write(Data("Error stopping stream: \(error)\n".utf8))
-                    }
+                        semaphore.signal()
+                    })
+                }
+                
+                // Wait for cleanup to complete (with timeout to prevent hanging)
+                let timeoutResult = semaphore.wait(timeout: .now() + .seconds(5))
+                if timeoutResult == .timedOut {
+                    FileHandle.standardError.write(Data("Warning: Stream cleanup timed out\n".utf8))
                 }
             }
             

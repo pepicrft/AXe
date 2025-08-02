@@ -119,8 +119,12 @@ struct StreamVideoTests {
         
         // Run command directly with timeout since stream-video outputs to stdout
         // and TestHelpers.runAxeCommand doesn't separate stdout/stderr
+        guard let udid = defaultSimulatorUDID else {
+            throw TestError.commandError("No simulator UDID specified in SIMULATOR_UDID environment variable")
+        }
+        
         let axePath = try TestHelpers.getAxePath()
-        let fullCommand = "\(axePath) \(command) --udid \(defaultSimulatorUDID ?? "")"
+        let fullCommand = "\(axePath) \(command) --udid \(udid)"
         
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/bin/bash")
