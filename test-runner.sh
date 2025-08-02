@@ -63,7 +63,6 @@ show_usage() {
     echo "  ButtonTests         Run only button tests"
     echo "  GestureTests        Run only gesture tests"
     echo "  ListSimulatorsTests Run only list simulators tests"
-    echo "  StreamVideoTests    Run only stream video tests"
     echo ""
     echo "Examples:"
     echo "  $0                  # Build everything and run all tests"
@@ -107,7 +106,7 @@ while [[ $# -gt 0 ]]; do
             VERBOSE=true
             shift
             ;;
-        SwipeTests|TapTests|KeyTests|TouchTests|TypeTests|ButtonTests|GestureTests|ListSimulatorsTests|StreamVideoTests)
+        SwipeTests|TapTests|KeyTests|TouchTests|TypeTests|ButtonTests|GestureTests|ListSimulatorsTests)
             TEST_FILTER="$1"
             shift
             ;;
