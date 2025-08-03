@@ -1,7 +1,7 @@
 import Testing
 import Foundation
 
-@Suite("Stream Video Basic Functionality Tests")
+@Suite("Stream Video Cancellation Tests")
 struct StreamVideoDebugTests {
     @Test("Stream video command runs without hanging")
     func streamVideoBasicExecution() async throws {

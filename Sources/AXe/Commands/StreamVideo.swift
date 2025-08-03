@@ -2,81 +2,76 @@ import ArgumentParser
 import Foundation
 import FBSimulatorControl
 @preconcurrency import FBControlCore
+#if os(macOS)
+import AppKit
+#endif
 
 struct StreamVideo: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "stream-video",
-        abstract: "Stream video from a simulator to stdout",
+        abstract: "Stream video from a simulator to stdout using screenshot capture",
         discussion: """
-        Streams the simulator's screen as video data to stdout. Supports multiple formats including H264, MJPEG, and raw BGRA.
+        Captures screenshots from a simulator at a specified frame rate and outputs them as a video stream.
+        This approach is similar to how browser-based simulator services work.
         
-        CURRENT STATUS:
-        - BGRA format: WORKING - Outputs raw uncompressed pixel data (4 bytes per pixel)
-        - H264 format: NOT WORKING - No output due to FBSimulatorControl issues
-        - MJPEG format: NOT WORKING - No output due to FBSimulatorControl issues
-        - Minicap format: NOT WORKING - No output due to FBSimulatorControl issues
+        Supported output formats:
+        - mjpeg: Motion JPEG stream (recommended for browser compatibility)
+        - raw: Raw JPEG images with boundary markers
+        - ffmpeg: Pipe to ffmpeg for encoding (requires ffmpeg installed)
+        - bgra: Raw BGRA pixel data (legacy format, not recommended)
         
-        For BGRA format, the output is raw pixel data that can be processed with tools like FFmpeg:
-        axe stream-video --format bgra --udid <UDID> | ffmpeg -f rawvideo -pixel_format bgra -video_size 393x852 -i - output.mp4
+        Examples:
+        # Stream MJPEG at 10 FPS
+        axe stream-video --udid <UDID> --fps 10 --format mjpeg > stream.mjpeg
         
-        Known issues:
-        - Apple removed support for streaming to stdout in xcrun simctl io recordVideo
-        - FBSimulatorControl's video compression (H264/MJPEG) has unresolved issues (see facebook/idb#787, #841)
+        # Pipe to ffmpeg for H264 encoding
+        axe stream-video --udid <UDID> --fps 30 --format ffmpeg | \\
+          ffmpeg -f image2pipe -framerate 30 -i - -c:v libx264 -preset ultrafast output.mp4
         
-        Alternative approaches:
-        - Use xcrun simctl io recordVideo to record to a file: xcrun simctl io <UDID> recordVideo output.mp4
-        - Use screen recording software like OBS to capture the simulator window
+        # Stream to a WebSocket server
+        axe stream-video --udid <UDID> --fps 15 --format raw | node mjpeg-server.js
+        
+        # Legacy BGRA format (for compatibility)
+        axe stream-video --udid <UDID> --format bgra | \\
+          ffmpeg -f rawvideo -pixel_format bgra -video_size 393x852 -i - output.mp4
         """
     )
     
     @Option(name: .customLong("udid"), help: "The UDID of the simulator.")
     var simulatorUDID: String
     
-    @Option(help: "Video format: h264, mjpeg, bgra, minicap")
-    var format: String = "h264"
+    @Option(help: "Output format: mjpeg, raw, ffmpeg, bgra (default: mjpeg)")
+    var format: String = "mjpeg"
     
-    @Option(help: "Frames per second (omit for lazy/on-damage streaming)")
-    var fps: Int?
+    @Option(help: "Frames per second (1-30, default: 10)")
+    var fps: Int = 10
     
-    @Option(help: "Compression quality (0.0-1.0, default: 0.2)")
-    var quality: Double = 0.2
+    @Option(help: "JPEG quality (1-100, default: 80)")
+    var quality: Int = 80
     
-    @Option(help: "Scale factor (0.0-1.0, default: 1.0)")
+    @Option(help: "Scale factor (0.1-1.0, default: 1.0)")
     var scale: Double = 1.0
-    
-    @Option(help: "Average bitrate in bits per second (H264 only)")
-    var bitrate: Int?
-    
-    @Option(help: "Key frame interval in seconds (H264 only, default: 10.0)")
-    var keyFrameInterval: Double = 10.0
     
     func validate() throws {
         // Validate format
-        let validFormats = ["h264", "mjpeg", "bgra", "minicap"]
+        let validFormats = ["mjpeg", "raw", "ffmpeg", "bgra"]
         guard validFormats.contains(format.lowercased()) else {
             throw ValidationError("Invalid format. Must be one of: \(validFormats.joined(separator: ", "))")
         }
         
+        // Validate FPS
+        guard fps >= 1 && fps <= 30 else {
+            throw ValidationError("FPS must be between 1 and 30")
+        }
+        
         // Validate quality
-        guard quality >= 0.0 && quality <= 1.0 else {
-            throw ValidationError("Quality must be between 0.0 and 1.0")
+        guard quality >= 1 && quality <= 100 else {
+            throw ValidationError("Quality must be between 1 and 100")
         }
         
         // Validate scale
-        guard scale > 0.0 && scale <= 1.0 else {
-            throw ValidationError("Scale must be between 0.0 and 1.0")
-        }
-        
-        // Validate FPS if provided
-        if let fps = fps {
-            guard fps > 0 && fps <= 60 else {
-                throw ValidationError("FPS must be between 1 and 60")
-            }
-        }
-        
-        // Validate key frame interval
-        guard keyFrameInterval > 0 else {
-            throw ValidationError("Key frame interval must be greater than 0")
+        guard scale >= 0.1 && scale <= 1.0 else {
+            throw ValidationError("Scale must be between 0.1 and 1.0")
         }
     }
     
@@ -103,95 +98,218 @@ struct StreamVideo: AsyncParsableCommand {
             throw CLIError(errorDescription: "Simulator \(simulatorUDID) is not booted. Current state: \(FBiOSTargetStateStringFromState(targetSimulator.state))")
         }
         
-        // Create video stream configuration
-        let encoding: FBVideoStreamEncoding = switch format.lowercased() {
-        case "h264": .H264
-        case "mjpeg": .MJPEG
-        case "bgra": .BGRA
-        case "minicap": .minicap
-        default: .H264
+        // Handle legacy BGRA format using the old implementation
+        if format.lowercased() == "bgra" {
+            try await streamBGRAFormat(targetSimulator: targetSimulator, logger: logger)
+            return
         }
-        
-        let config = FBVideoStreamConfiguration(
-            encoding: encoding,
-            framesPerSecond: fps.map { NSNumber(value: $0) },
-            compressionQuality: NSNumber(value: quality),
-            scaleFactor: NSNumber(value: scale),
-            avgBitrate: (encoding == .H264 && bitrate != nil) ? NSNumber(value: bitrate!) : nil,
-            keyFrameRate: encoding == .H264 ? NSNumber(value: keyFrameInterval) : nil
-        )
         
         // Log to stderr so it doesn't mix with video data on stdout
-        FileHandle.standardError.write(Data("Starting video stream from simulator \(targetSimulator.udid)...\n".utf8))
-        FileHandle.standardError.write(Data("Format: \(format), FPS: \(fps.map { String($0) } ?? "lazy"), Quality: \(quality), Scale: \(scale)\n".utf8))
-        if format.lowercased() != "bgra" {
-            FileHandle.standardError.write(Data("\nWARNING: Only BGRA format currently works. H264/MJPEG formats have known issues.\n".utf8))
-            FileHandle.standardError.write(Data("Consider using --format bgra or 'xcrun simctl io \(targetSimulator.udid) recordVideo output.mp4'\n".utf8))
+        FileHandle.standardError.write(Data("Starting screenshot-based video stream from simulator \(targetSimulator.udid)...\n".utf8))
+        FileHandle.standardError.write(Data("Format: \(format), FPS: \(fps), Quality: \(quality), Scale: \(scale)\n".utf8))
+        FileHandle.standardError.write(Data("Press Ctrl+C to stop streaming\n".utf8))
+        
+        // Calculate frame interval
+        let frameInterval = 1.0 / Double(fps)
+        
+        // MJPEG boundary for multipart stream
+        let mjpegBoundary = "--mjpegstream"
+        
+        // Start capture loop
+        do {
+            var frameCount: UInt64 = 0
+            let startTime = Date()
+            
+            // Write MJPEG header if needed
+            if format == "mjpeg" {
+                let header = "HTTP/1.1 200 OK\r\nContent-Type: multipart/x-mixed-replace; boundary=\(mjpegBoundary)\r\n\r\n"
+                FileHandle.standardOutput.write(Data(header.utf8))
+            }
+            
+            // Set up cancellation handler
+            await withTaskCancellationHandler {
+                while !Task.isCancelled {
+                    let frameStartTime = Date()
+                    
+                    do {
+                        // Take screenshot
+                        let screenshotFuture = targetSimulator.takeScreenshot(.JPEG)
+                        let screenshotNSData = try await FutureBridge.value(screenshotFuture)
+                        let screenshotData = screenshotNSData as Data
+                        
+                        // Apply scaling if needed
+                        let processedData: Data
+                        if scale < 1.0 {
+                            processedData = try await scaleJPEGData(screenshotData, scale: scale, quality: quality)
+                        } else if quality != 80 {
+                            // Re-encode with different quality
+                            processedData = try await reencodeJPEGData(screenshotData, quality: quality)
+                        } else {
+                            processedData = screenshotData
+                        }
+                        
+                        // Output based on format
+                        switch format {
+                        case "mjpeg":
+                            // Write MJPEG frame with boundary
+                            let frameHeader = "\(mjpegBoundary)\r\nContent-Type: image/jpeg\r\nContent-Length: \(processedData.count)\r\n\r\n"
+                            FileHandle.standardOutput.write(Data(frameHeader.utf8))
+                            FileHandle.standardOutput.write(processedData)
+                            FileHandle.standardOutput.write(Data("\r\n".utf8))
+                            
+                        case "raw":
+                            // Write raw JPEG with 4-byte length prefix (big-endian)
+                            var length = UInt32(processedData.count).bigEndian
+                            FileHandle.standardOutput.write(Data(bytes: &length, count: 4))
+                            FileHandle.standardOutput.write(processedData)
+                            
+                        case "ffmpeg":
+                            // Write raw JPEG data for ffmpeg's image2pipe
+                            FileHandle.standardOutput.write(processedData)
+                            
+                        default:
+                            break
+                        }
+                        
+                        frameCount += 1
+                        
+                        // Log progress every second
+                        if frameCount % UInt64(fps) == 0 {
+                            let elapsed = Date().timeIntervalSince(startTime)
+                            let actualFPS = Double(frameCount) / elapsed
+                            FileHandle.standardError.write(Data(String(format: "Captured %llu frames (%.1f FPS actual)\n", frameCount, actualFPS).utf8))
+                        }
+                        
+                    } catch {
+                        FileHandle.standardError.write(Data("Error capturing frame: \(error.localizedDescription)\n".utf8))
+                    }
+                    
+                    // Calculate time to next frame
+                    let frameElapsed = Date().timeIntervalSince(frameStartTime)
+                    let sleepTime = frameInterval - frameElapsed
+                    
+                    if sleepTime > 0 {
+                        try? await Task.sleep(nanoseconds: UInt64(sleepTime * 1_000_000_000))
+                    }
+                }
+            } onCancel: {
+                FileHandle.standardError.write(Data("\nStopping video stream...\n".utf8))
+                
+                // Write final boundary for MJPEG
+                if format == "mjpeg" {
+                    let footer = "\(mjpegBoundary)--\r\n"
+                    FileHandle.standardOutput.write(Data(footer.utf8))
+                }
+                
+                let elapsed = Date().timeIntervalSince(startTime)
+                let avgFPS = Double(frameCount) / elapsed
+                FileHandle.standardError.write(Data(String(format: "Streamed %llu frames in %.1f seconds (%.1f FPS average)\n", frameCount, elapsed, avgFPS).utf8))
+            }
+            
+        } catch {
+            throw CLIError(errorDescription: "Failed to stream video: \(error.localizedDescription)")
         }
+    }
+    
+    // Legacy BGRA streaming implementation
+    private func streamBGRAFormat(targetSimulator: FBSimulator, logger: AxeLogger) async throws {
+        FileHandle.standardError.write(Data("Starting BGRA video stream from simulator \(targetSimulator.udid)...\n".utf8))
+        FileHandle.standardError.write(Data("Format: bgra, Quality: \(quality), Scale: \(scale)\n".utf8))
+        FileHandle.standardError.write(Data("Note: This is raw pixel data. Use ffmpeg to convert:\n".utf8))
+        FileHandle.standardError.write(Data("  axe stream-video --format bgra --udid <UDID> | ffmpeg -f rawvideo -pixel_format bgra -video_size WIDTHxHEIGHT -i - output.mp4\n".utf8))
         FileHandle.standardError.write(Data("Press Ctrl+C to stop streaming\n".utf8))
         
         do {
-            // Note: We don't need to explicitly connect to framebuffer because
-            // targetSimulator.createStream will do it internally
+            let config = FBVideoStreamConfiguration(
+                encoding: .BGRA,
+                framesPerSecond: nil,
+                compressionQuality: NSNumber(value: Double(quality) / 100.0),
+                scaleFactor: NSNumber(value: scale),
+                avgBitrate: nil,
+                keyFrameRate: nil
+            )
             
-            // Create consumer that writes to stdout
             let stdoutConsumer = FBFileWriter.syncWriter(withFileDescriptor: STDOUT_FILENO, closeOnEndOfFile: false)
-            
-            // Create video stream using the simulator's createStream method
             let videoStreamFuture = targetSimulator.createStream(with: config)
             let videoStream = try await FutureBridge.value(videoStreamFuture)
-            
-            // Start streaming to stdout
             let startFuture = videoStream.startStreaming(stdoutConsumer)
             
-            // Note: FBSimulatorControl's startStreaming often doesn't complete its future
-            // but the stream may still work. We'll continue without waiting.
             startFuture.onQueue(BridgeQueues.videoStreamQueue, notifyOfCompletion: { future in
                 if let error = future.error {
                     FileHandle.standardError.write(Data("Stream initialization error: \(error)\n".utf8))
                 }
             })
             
-            // Give the stream time to start
-            try await Task.sleep(nanoseconds: 1_000_000_000) // 1 second
+            try await Task.sleep(nanoseconds: 1_000_000_000)
+            FileHandle.standardError.write(Data("BGRA stream is now running...\n".utf8))
             
-            FileHandle.standardError.write(Data("Stream is now running...\n".utf8))
-            
-            // Set up cancellation handler with proper synchronous cleanup
             await withTaskCancellationHandler {
-                // Keep the stream running until cancelled
                 while !Task.isCancelled {
-                    try? await Task.sleep(nanoseconds: 100_000_000) // 100ms
+                    try? await Task.sleep(nanoseconds: 100_000_000)
                 }
             } onCancel: {
-                // Synchronous cleanup - stop the stream immediately
-                FileHandle.standardError.write(Data("\nStopping video stream...\n".utf8))
-                
-                // Use a semaphore to synchronously wait for cleanup
+                FileHandle.standardError.write(Data("\nStopping BGRA stream...\n".utf8))
                 let semaphore = DispatchSemaphore(value: 0)
                 
                 BridgeQueues.videoStreamQueue.async {
                     let stopFuture = videoStream.stopStreaming()
-                    
-                    stopFuture.onQueue(BridgeQueues.videoStreamQueue, notifyOfCompletion: { future in
-                        if let error = future.error {
-                            FileHandle.standardError.write(Data("Stream stop error: \(error)\n".utf8))
-                        } else {
-                            FileHandle.standardError.write(Data("Stream stopped successfully\n".utf8))
-                        }
+                    stopFuture.onQueue(BridgeQueues.videoStreamQueue, notifyOfCompletion: { _ in
+                        FileHandle.standardError.write(Data("BGRA stream stopped\n".utf8))
                         semaphore.signal()
                     })
                 }
                 
-                // Wait for cleanup to complete (with timeout to prevent hanging)
-                let timeoutResult = semaphore.wait(timeout: .now() + .seconds(5))
-                if timeoutResult == .timedOut {
-                    FileHandle.standardError.write(Data("Warning: Stream cleanup timed out\n".utf8))
-                }
+                _ = semaphore.wait(timeout: .now() + .seconds(5))
             }
-            
         } catch {
-            throw CLIError(errorDescription: "Failed to stream video: \(error.localizedDescription)")
+            throw CLIError(errorDescription: "Failed to stream BGRA video: \(error.localizedDescription)")
         }
+    }
+    
+    // Helper function to scale JPEG data
+    private func scaleJPEGData(_ data: Data, scale: Double, quality: Int) async throws -> Data {
+        #if os(macOS)
+        guard let image = NSImage(data: data) else {
+            throw CLIError(errorDescription: "Failed to decode JPEG data")
+        }
+        
+        let newSize = NSSize(
+            width: image.size.width * scale,
+            height: image.size.height * scale
+        )
+        
+        let newImage = NSImage(size: newSize)
+        newImage.lockFocus()
+        image.draw(in: NSRect(origin: .zero, size: newSize))
+        newImage.unlockFocus()
+        
+        guard let tiffData = newImage.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let jpegData = bitmap.representation(using: .jpeg, properties: [NSBitmapImageRep.PropertyKey.compressionFactor: Double(quality) / 100.0]) else {
+            throw CLIError(errorDescription: "Failed to re-encode scaled image")
+        }
+        
+        return jpegData
+        #else
+        // For non-macOS platforms, return original data
+        return data
+        #endif
+    }
+    
+    // Helper function to re-encode JPEG with different quality
+    private func reencodeJPEGData(_ data: Data, quality: Int) async throws -> Data {
+        #if os(macOS)
+        guard let image = NSImage(data: data),
+              let tiffData = image.tiffRepresentation,
+              let bitmap = NSBitmapImageRep(data: tiffData),
+              let jpegData = bitmap.representation(using: .jpeg, properties: [NSBitmapImageRep.PropertyKey.compressionFactor: Double(quality) / 100.0]) else {
+            throw CLIError(errorDescription: "Failed to re-encode image with new quality")
+        }
+        
+        return jpegData
+        #else
+        // For non-macOS platforms, return original data
+        return data
+        #endif
     }
 }
